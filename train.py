@@ -39,34 +39,50 @@ class Graph():
                                             rate=hp.dropout_rate, 
                                             training=tf.convert_to_tensor(is_training))
                 ## Blocks transformerでは積んでた
-                import ipdb; ipdb.set_trace()
-                with tf.variable_scope("num_blocks_{}".format(i)):
-#                    self.enc_x = multihead_attention(queries=self.enc_x, 
-#                                                    keys=self.enc_x, 
-#                                                    num_units=hp.hidden_units, 
-#                                                    num_heads=hp.num_heads, 
-#                                                    dropout_rate=hp.dropout_rate,
-#                                                    is_training=is_training,
-#                                                    causality=False)
-#                    self.enc_y = multihead_attention(queries=self.enc_y, 
-#                                                    keys=self.enc_y, 
-#                                                    num_units=hp.hidden_units, 
-#                                                    num_heads=hp.num_heads, 
-#                                                    dropout_rate=hp.dropout_rate,
-#                                                    is_training=is_training,
-#                                                    causality=False)
-                    self.enc_x = feedforward(self.enc_x, num_units=[4*hp.hidden_units, hp.hidden_units])
-                    self.enc_y = feedforward(self.enc_y, num_units=[4*hp.hidden_units, hp.hidden_units])
-                    self.hl = tf.concat(self.enc_x, self.enc_y, -1)
-                    self.hl = tf.layers.dense(self.hl, hp.hidden_units)
-                    self.hl = tf.layers.relu(self.hl)
-                    self.logits = tf.layers.dense(self.hl, 2)
+                #with tf.variable_scope("num_blocks_{}".format(1)):
+                with tf.variable_scope("enc_x"):
+                    rnninput = tf.transpose(self.enc_x,perm=[1,0,2])
+                    stack_num = 1
+                    bilstmA = tf.contrib.cudnn_rnn.CudnnLSTM(stack_num, hp.hidden_units, dropout=hp.dropout_rate, name="forward_lstm")
+                    bilstmB = tf.contrib.cudnn_rnn.CudnnLSTM(stack_num, hp.hidden_units, dropout=hp.dropout_rate, name="backward_lstm")
+                    rnnoutputA,_ = bilstmA(rnninput)
+                    rnnoutputB,_ = bilstmB(rnninput[::-1])
+                    # 各word毎のhidden representationが欲しい時
+                    # rnnoutput = tf.concat([rnnoutputA,rnnoutputB[::-1]],axis=2)
+                    # rnnoutput = tf.transpose(rnnoutput,perm=[1,0,2])
+                    # 最初と最後のhidden representationを取ってくる
+                    rnnoutput_x = tf.concat([rnnoutputA,rnnoutputB],axis=2)[-1] # shape=[timestep, minibatch, emb]
+
+                with tf.variable_scope("enc_y"):
+                    rnninput = tf.transpose(self.enc_y,perm=[1,0,2])
+                    stack_num = 1
+                    bilstmA = tf.contrib.cudnn_rnn.CudnnLSTM(stack_num, hp.hidden_units, dropout=hp.dropout_rate, name="forward_lstm")
+                    bilstmB = tf.contrib.cudnn_rnn.CudnnLSTM(stack_num, hp.hidden_units, dropout=hp.dropout_rate, name="backward_lstm")
+                    rnnoutputA,_ = bilstmA(rnninput)
+                    rnnoutputB,_ = bilstmB(rnninput[::-1])
+                    # 各word毎のhidden representationが欲しい時
+                    # rnnoutput = tf.concat([rnnoutputA,rnnoutputB[::-1]],axis=2)
+                    # rnnoutput = tf.transpose(rnnoutput,perm=[1,0,2])
+                    # 最初と最後のhidden representationを取ってくる
+                    rnnoutput_y = tf.concat([rnnoutputA,rnnoutputB],axis=2)[-1] # shape=[timestep, minibatch, emb]
+ 
+
+                rnnoutput_xy = tf.concat([rnnoutputA,rnnoutputB[::-1]],axis=2)
+
+                #self.enc_x = feedforward(self.enc_x, num_units=[4*hp.hidden_units, hp.hidden_units])
+                #self.enc_y = feedforward(self.enc_y, num_units=[4*hp.hidden_units, hp.hidden_units])
+
+                #self.hl = tf.concat(self.enc_x, self.enc_y, -1)
+                self.hl = tf.concat([rnnoutput_x,rnnoutput_y], -1)
+                self.hl = tf.layers.dense(self.hl, hp.hidden_units, activation=tf.nn.relu)
+                self.logits = tf.layers.dense(self.hl, 2)
             print()
             if is_training:  
-                self.loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.hl, labels=self.label)
-                self.mean_loss = tf.reduce_sum(self.loss*self.istarget) / (tf.reduce_sum(self.istarget))
-#                self.optimizer = tf.train.AdamOptimizer(learning_rate=hp.lr, beta1=0.9, beta2=0.98, epsilon=1e-8)
-#                self.train_op = self.optimizer.minimize(self.mean_loss)
+                self.loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.label)
+                # self.mean_loss = tf.reduce_sum(self.loss*self.istarget) / (tf.reduce_sum(self.istarget))
+                self.mean_loss = tf.reduce_mean(self.loss)
+                self.optimizer = tf.train.AdamOptimizer(learning_rate=hp.lr, beta1=0.9, beta2=0.98, epsilon=1e-8)
+                self.train_op = self.optimizer.minimize(self.mean_loss)
                 tf.summary.FileWriter(logdir='./graph/', graph=self.graph)
 
 if __name__ == '__main__':                
@@ -80,6 +96,7 @@ if __name__ == '__main__':
     sv = tf.train.Supervisor(graph=g.graph, 
                              logdir="log",
                              save_model_secs=0)
+    import ipdb; ipdb.set_trace()
     with sv.managed_session() as sess:
         for epoch in range(1, hp.num_epochs+1): 
             if sv.should_stop(): break
