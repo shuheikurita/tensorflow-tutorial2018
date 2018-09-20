@@ -15,7 +15,6 @@ def load_vocab():
 
 def load_data(text_q_file, text_a_file):
     word2idx, idx2word = load_vocab()
-        
     q_list, a_list = [], []
     for line in open(text_q_file):
         q_list.append(
@@ -46,7 +45,6 @@ def get_batch_data():
                                 capacity=2,   
                                 min_after_dequeue=1, 
                                 allow_smaller_final_batch=False)
-    
     return x, y, num_batch # (N, T), (N, T), ()
 
 

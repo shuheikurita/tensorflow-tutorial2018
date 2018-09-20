@@ -15,19 +15,19 @@ class Graph():
             self.label = tf.placeholder(tf.int32, shape=(None))
             # Load vocabulary    
             de2idx, idx2de = load_vocab()
-            en2idx, idx2en = load_vocab()
+            vocab_size = len(de2idx) + 2
             
             # Encoder
             with tf.variable_scope("encoder"):
                 ## Embedding
                 self.enc_x = embedding(self.x, 
-                                      vocab_size=len(de2idx), 
+                                      vocab_size=vocab_size, 
                                       num_units=hp.hidden_units, 
                                       scale=True,
                                       scope="enc_x_embed")
 
                 self.enc_y = embedding(self.y, 
-                                      vocab_size=len(de2idx), 
+                                      vocab_size=vocab_size, 
                                       num_units=hp.hidden_units, 
                                       scale=True,
                                       scope="enc_y_embed")
@@ -85,20 +85,37 @@ class Graph():
                 self.train_op = self.optimizer.minimize(self.mean_loss)
                 tf.summary.FileWriter(logdir='./graph/', graph=self.graph)
 
+            #import ipdb; ipdb.set_trace()
+            # saver
+            self.saver = tf.train.Saver(max_to_keep=0)
+
+            # session
+            self.sess = tf.Session()
+            self.sess.run(tf.global_variables_initializer())
+
 if __name__ == '__main__':                
-    # Load vocabulary    
-    word2idx, idx2word = load_vocab()
     
     # Construct graph
     g = Graph("train"); print("Graph loaded")
     
     # Start session
-    sv = tf.train.Supervisor(graph=g.graph, 
-                             logdir="log",
-                             save_model_secs=0)
-    import ipdb; ipdb.set_trace()
+    #sv = tf.train.Supervisor(graph=g.graph, 
+    #                         logdir="log",
+    #                         save_model_secs=0)
+    #
+    for epoch in range(1, hp.num_epochs+1):
+        datasets=[0,1]
+        for data in datasets:
+            feed_dict={
+                    g.x:np.array([[1,2,3,4],[2,2,3,4]]),
+                    g.y:np.array([[1,2,3,4],[1,2,0,0]]),
+                    g.label:np.array([0,1]),
+                    }
+            loss,train_loss = sess.run([self.mean_loss,self.train_op],feed_dict=feed_dict)
+            print("Epoch: %d, loss: %f"%(epoch,loss))
+
     with sv.managed_session() as sess:
-        for epoch in range(1, hp.num_epochs+1): 
+        for epoch in range(1, hp.num_epochs+1):
             if sv.should_stop(): break
             for step in tqdm(range(g.num_batch), total=g.num_batch, ncols=70, leave=False, unit='b'):
                 x = sess.run(g.logits)
