@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 
 from data_load import get_batch_data, load_vocab
 from hyperparams import Hyperparams as hp
@@ -104,6 +105,7 @@ if __name__ == '__main__':
     #                         save_model_secs=0)
     #
     for epoch in range(1, hp.num_epochs+1):
+        print("*** Epoch %d ***"%epoch)
         datasets=[0,1]
         for data in datasets:
             feed_dict={
