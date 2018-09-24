@@ -4,7 +4,7 @@ import numpy as np
 from data_load import get_batch_data, load_vocab
 from hyperparams import Hyperparams as hp
 from modules import *
-from tqdm import tqdm
+#from tqdm import tqdm
 
 class Graph():
     def __init__(self, is_training=True):
