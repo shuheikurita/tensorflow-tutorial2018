@@ -10,9 +10,8 @@ class Graph():
     def __init__(self, is_training=True):
         self.graph = tf.Graph()
         with self.graph.as_default():
-#            self.x, self.y, self.label, self.num_batch = get_batch_data()
-            self.x = tf.placeholder(tf.int32, shape=(None, hp.maxlen))
-            self.y = tf.placeholder(tf.int32, shape=(None, hp.maxlen))
+            self.idx_q = tf.placeholder(tf.int32, shape=(None, hp.maxlen))
+            self.idx_a = tf.placeholder(tf.int32, shape=(None, hp.maxlen))
             self.label = tf.placeholder(tf.int32, shape=(None))
             # Load vocabulary    
             de2idx, idx2de = load_vocab()
@@ -21,65 +20,42 @@ class Graph():
             # Encoder
             with tf.variable_scope("encoder"):
                 ## Embedding
-                self.enc_x = embedding(self.x, 
+                self.enc_q = embedding(self.idx_q, 
                                       vocab_size=vocab_size, 
                                       num_units=hp.hidden_units, 
                                       scale=True,
                                       scope="enc_x_embed")
 
-                self.enc_y = embedding(self.y, 
+                self.enc_a = embedding(self.idx_a, 
                                       vocab_size=vocab_size, 
                                       num_units=hp.hidden_units, 
                                       scale=True,
                                       scope="enc_y_embed")
                 ## Dropout
-                self.enc_x = tf.layers.dropout(self.enc_x, 
+                self.enc_q = tf.layers.dropout(self.enc_q, 
                                             rate=hp.dropout_rate, 
                                             training=tf.convert_to_tensor(is_training))
-                self.enc_y = tf.layers.dropout(self.enc_y, 
+                self.enc_a = tf.layers.dropout(self.enc_a, 
                                             rate=hp.dropout_rate, 
                                             training=tf.convert_to_tensor(is_training))
-                ## Blocks transformerでは積んでた
-                #with tf.variable_scope("num_blocks_{}".format(1)):
-                with tf.variable_scope("enc_x"):
-                    rnninput = tf.transpose(self.enc_x,perm=[1,0,2])
-                    stack_num = 1
-                    bilstmA = tf.contrib.cudnn_rnn.CudnnLSTM(stack_num, hp.hidden_units, dropout=hp.dropout_rate, name="forward_lstm")
-                    bilstmB = tf.contrib.cudnn_rnn.CudnnLSTM(stack_num, hp.hidden_units, dropout=hp.dropout_rate, name="backward_lstm")
-                    rnnoutputA,_ = bilstmA(rnninput)
-                    rnnoutputB,_ = bilstmB(rnninput[::-1])
-                    # 各word毎のhidden representationが欲しい時
-                    # rnnoutput = tf.concat([rnnoutputA,rnnoutputB[::-1]],axis=2)
-                    # rnnoutput = tf.transpose(rnnoutput,perm=[1,0,2])
-                    # 最初と最後のhidden representationを取ってくる
-                    rnnoutput_x = tf.concat([rnnoutputA,rnnoutputB],axis=2)[-1] # shape=[timestep, minibatch, emb]
 
-                with tf.variable_scope("enc_y"):
-                    rnninput = tf.transpose(self.enc_y,perm=[1,0,2])
-                    stack_num = 1
-                    bilstmA = tf.contrib.cudnn_rnn.CudnnLSTM(stack_num, hp.hidden_units, dropout=hp.dropout_rate, name="forward_lstm")
-                    bilstmB = tf.contrib.cudnn_rnn.CudnnLSTM(stack_num, hp.hidden_units, dropout=hp.dropout_rate, name="backward_lstm")
-                    rnnoutputA,_ = bilstmA(rnninput)
-                    rnnoutputB,_ = bilstmB(rnninput[::-1])
-                    # 各word毎のhidden representationが欲しい時
-                    # rnnoutput = tf.concat([rnnoutputA,rnnoutputB[::-1]],axis=2)
-                    # rnnoutput = tf.transpose(rnnoutput,perm=[1,0,2])
-                    # 最初と最後のhidden representationを取ってくる
-                    rnnoutput_y = tf.concat([rnnoutputA,rnnoutputB],axis=2)[-1] # shape=[timestep, minibatch, emb]
- 
+                hid_q = cudnn_cp_stack_bilstm(self.enc_q, hp.stack_num, hp.hidden_units, hp.maxlen, hp.dropout_rate, "q")
+                hid_a = cudnn_cp_stack_bilstm(self.enc_a, hp.stack_num, hp.hidden_units, hp.maxlen, hp.dropout_rate, "a") 
 
-                rnnoutput_xy = tf.concat([rnnoutputA,rnnoutputB[::-1]],axis=2)
+                lstm_units = hp.hidden_units
+                #rep_q = tf.concat([hid_q[:,-1,0:lstm_units+1],hid_q[:,0,lstm_units+1:]], axis=-1)
+                #rep_a = tf.concat([hid_a[:,-1,0:lstm_units+1],hid_a[:,0,lstm_units+1:]], axis=-1)
+                rep_q = tf.concat([hid_q[:,-1,:],hid_q[:,0,:]], axis=-1)
+                rep_a = tf.concat([hid_a[:,-1,:],hid_a[:,0,:]], axis=-1)
 
-                #self.enc_x = feedforward(self.enc_x, num_units=[4*hp.hidden_units, hp.hidden_units])
-                #self.enc_y = feedforward(self.enc_y, num_units=[4*hp.hidden_units, hp.hidden_units])
 
-                #self.hl = tf.concat(self.enc_x, self.enc_y, -1)
-                self.hl = tf.concat([rnnoutput_x,rnnoutput_y], -1)
+                self.hl = tf.concat([rep_q,rep_a], -1)
                 self.hl = tf.layers.dense(self.hl, hp.hidden_units, activation=tf.nn.relu)
                 self.logits = tf.layers.dense(self.hl, 2)
+                self.prob = tf.nn.softmax(self.logits)
             print()
             if is_training:  
-                self.loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.label)
+                self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.logits, labels=self.label)
                 # self.mean_loss = tf.reduce_sum(self.loss*self.istarget) / (tf.reduce_sum(self.istarget))
                 self.mean_loss = tf.reduce_mean(self.loss)
                 self.optimizer = tf.train.AdamOptimizer(learning_rate=hp.lr, beta1=0.9, beta2=0.98, epsilon=1e-8)
@@ -104,23 +80,47 @@ if __name__ == '__main__':
     #                         logdir="log",
     #                         save_model_secs=0)
     #
-    for epoch in range(1, hp.num_epochs+1):
-        print("*** Epoch %d ***"%epoch)
-        datasets=[0,1]
-        for data in datasets:
-            feed_dict={
-                    g.x:np.array([[1,2,3,4],[2,2,3,4]]),
-                    g.y:np.array([[1,2,3,4],[1,2,0,0]]),
-                    g.label:np.array([0,1]),
-                    }
-            loss,train_loss = sess.run([self.mean_loss,self.train_op],feed_dict=feed_dict)
-            print("Epoch: %d, loss: %f"%(epoch,loss))
+    #self.x, self.y, self.label, self.num_batch = get_batch_data()
+    #print("Now you are in Ipython in IPython notebook!")
+    #import IPython; IPython.embed()
+    
+    datasets=[
+            [np.array([ [1,4,5,8,3]+[0 for _ in range(11)], [1,1,2,6,3]+[0 for _ in range(11)] ]),
+             np.array([ [1,2]+[0 for _ in range(14)],       [9,10]+[0 for _ in range(14)]])],
+            [np.array([ [1,4,5,5,3]+[0 for _ in range(11)], [1,4,10,5,3]+[0 for _ in range(11)] ]),
+             np.array([ [10]+[0 for _ in range(15)],        [10]+[0 for _ in range(15)]])],
+            [np.array([ [4,4,5,6,3]+[0 for _ in range(11)], [9,4,2,6,3]+[0 for _ in range(11)] ]),
+             np.array([ [1,2]+[0 for _ in range(14)],       [5,10,4,10]+[0 for _ in range(12)]])],
+            [np.array([ [4,4,5,8,3]+[0 for _ in range(11)], [1,4,10,5,3]+[0 for _ in range(11)] ]),
+             np.array([ [1,2]+[0 for _ in range(14)],        [1,2]+[0 for _ in range(14)]])],
+    ]
+    labels=[np.array([0,1]), np.array([1,1]), np.array([0,1]), np.array([0,0])]
+#     print(datasets)
+#     print(labels)
+#     print(label)
 
-    with sv.managed_session() as sess:
-        for epoch in range(1, hp.num_epochs+1):
-            if sv.should_stop(): break
-            for step in tqdm(range(g.num_batch), total=g.num_batch, ncols=70, leave=False, unit='b'):
-                x = sess.run(g.logits)
-                print(x)
-#            sv.saver.save(sess, hp.logdir + '/model_epoch_%02d' % (epoch))
-    print("Done")    
+    ## Train
+    for epoch in range(1, hp.num_epochs):
+        print("*** Epoch %d ***"%epoch)
+        for mb,(data,lab) in enumerate(zip(datasets,labels)):
+            feed_dict={
+                    g.idx_q:data[0],
+                    g.idx_a:data[1],
+                    g.label:lab,
+                    }
+            log_loss,log_train_op = g.sess.run([g.mean_loss,g.train_op],feed_dict=feed_dict)
+            print("Epoch: %d, Mini-batch: %d, loss: %f"%(epoch,mb,log_loss))
+    print("Train Done.")
+    
+    ## Test
+    for data,lab in zip(datasets,labels):
+        feed_dict={
+                g.idx_q:data[0],
+                g.idx_a:data[1],
+                g.label:lab,
+                }
+        log_prob = g.sess.run([g.prob],feed_dict=feed_dict)
+        log_class = np.argmax(log_prob,axis=-1)
+        print("Probability: "+str(log_prob))
+        print("Argmax: "+str(log_class))
+    print("Test Done.")    
