@@ -112,9 +112,9 @@ if __name__ == '__main__':
             print("*** Epoch %d ***"%epoch)
             for mb,(data,lab) in enumerate(zip(datasets,labels)):
                 feed_dict={
-                        g.idx_q:q,
-                        g.idx_a:a,
-                        g.label:l,
+                        g.idx_q:data[0],
+                        g.idx_a:data[1],
+                        g.label:lab,
                         }
                 log_loss,log_train_op = g.sess.run([g.mean_loss,g.train_op],feed_dict=feed_dict)
                 print("Epoch: %d, Mini-batch: %d, loss: %f"%(epoch,mb,log_loss))
