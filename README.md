@@ -30,7 +30,7 @@ jupyter notebook
 . Open the link`http://localhost:8888/?token=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX (specified on the termial)` on your Chrome browser. (Firefox might work. I recommend either Chrome or Firefox.)
 Ask me if you cannot launch the Jupyter notebook before the lecture.
 
-Open *tutorial.ipynb*
+Open *tutorial.ipynb* for the lecture.
 
 ## Author ##
 Shuhei Kurita kurita@nlp.ist.i.kyoto-u.ac.jp
