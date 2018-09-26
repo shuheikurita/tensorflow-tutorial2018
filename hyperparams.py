@@ -9,3 +9,5 @@ class Hyperparams:
     stack_num = 1
     lr = 0.0001
     dropout_rate = 0.5
+    
+    use_real_data=False

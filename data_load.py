@@ -31,21 +31,27 @@ def load_data(text_q_file, text_a_file):
         a_array[i] = np.lib.pad(y, [0, hp.maxlen-len(y)], 'constant', constant_values=(0, 0))
     return q_array, a_array
 
+def load_label(text_label):
+    with open(text_label,"rt") as f:
+        return np.loadtxt(f)
+
 def get_batch_data():
     q_list, a_list = load_data(hp.q_train_data_path, hp.a_train_data_path)
-    print(q_list)
+    l_list = load_label(hp.label_train_data_path)
+    #print(q_list)
     q = tf.convert_to_tensor(q_list, tf.int32)
     a = tf.convert_to_tensor(a_list, tf.int32)
+    l = tf.convert_to_tensor(l_list, tf.int32)
     batch_size = 1
-    num_batch = len(q_list) // 1
-    input_queues = tf.train.slice_input_producer([q, a])
-    x, y = tf.train.shuffle_batch(input_queues,
+    num_batch = len(q_list) // batch_size
+    input_queues = tf.train.slice_input_producer([q, a, l])
+    x, y, z = tf.train.shuffle_batch(input_queues,
                                 num_threads=1,
                                 batch_size=1, 
                                 capacity=2,   
                                 min_after_dequeue=1, 
                                 allow_smaller_final_batch=False)
-    return x, y, num_batch # (N, T), (N, T), ()
+    return x, y, z, num_batch # (N, T), (N, T), ()
 
-
-print(get_batch_data())
+if __name__ == '__main__': 
+    print(get_batch_data())
