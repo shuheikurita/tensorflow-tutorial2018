@@ -43,15 +43,15 @@ class Graph():
                 hid_a = cudnn_cp_stack_bilstm(self.enc_a, hp.stack_num, hp.hidden_units, hp.maxlen, hp.dropout_rate, "a") 
 
             lstm_units = hp.hidden_units
-            #rep_q = tf.concat([hid_q[:,-1,0:lstm_units+1],hid_q[:,0,lstm_units+1:]], axis=-1)
-            #rep_a = tf.concat([hid_a[:,-1,0:lstm_units+1],hid_a[:,0,lstm_units+1:]], axis=-1)
-            rep_q = tf.concat([hid_q[:,-1,:],hid_q[:,0,:]], axis=-1)
-            rep_a = tf.concat([hid_a[:,-1,:],hid_a[:,0,:]], axis=-1)
+            rep_q = tf.concat([hid_q[:,-1,0:lstm_units+1],hid_q[:,0,lstm_units+1:]], axis=-1)
+            rep_a = tf.concat([hid_a[:,-1,0:lstm_units+1],hid_a[:,0,lstm_units+1:]], axis=-1)
+            #rep_q = tf.concat([hid_q[:,-1,:],hid_q[:,0,:]], axis=-1)
+            #rep_a = tf.concat([hid_a[:,-1,:],hid_a[:,0,:]], axis=-1)
 
 
             self.hl = tf.concat([rep_q,rep_a], -1)
             self.hl = tf.layers.dense(self.hl, hp.hidden_units, activation=tf.nn.relu)
-            self.logits = tf.layers.dense(self.hl, 2)
+            self.logits = tf.layers.dense(self.hl, 2, use_bias=False)
             self.prob = tf.nn.softmax(self.logits)
 
             if is_training:  
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     # Construct graph
     g = Graph("train"); print("Graph loaded")
     
-    if hp.use_real_data:
+    if hp.use_real_text:
         for epoch in range(1, hp.num_epochs):
             print("*** Epoch %d ***"%epoch)
             q,a,l=g.sess.run([g.tq,g.ta,g.tl])
@@ -91,44 +91,42 @@ if __name__ == '__main__':
             print("Epoch: %d, loss: %f"%(epoch,log_loss))
             print("Train Done.")
 
-    else:
-        datasets=[
-                [np.array([ [1,4,5,8,3]+[0 for _ in range(11)], [1,1,2,6,3]+[0 for _ in range(11)] ]),
-                 np.array([ [1,2]+[0 for _ in range(14)],       [9,10]+[0 for _ in range(14)]])],
-                [np.array([ [1,4,5,5,3]+[0 for _ in range(11)], [1,4,10,5,3]+[0 for _ in range(11)] ]),
-                 np.array([ [10]+[0 for _ in range(15)],        [10]+[0 for _ in range(15)]])],
-                [np.array([ [4,4,5,6,3]+[0 for _ in range(11)], [9,4,2,6,3]+[0 for _ in range(11)] ]),
-                 np.array([ [1,2]+[0 for _ in range(14)],       [5,10,4,10]+[0 for _ in range(12)]])],
-                [np.array([ [4,4,5,8,3]+[0 for _ in range(11)], [1,4,10,5,3]+[0 for _ in range(11)] ]),
-                 np.array([ [1,2]+[0 for _ in range(14)],        [1,2]+[0 for _ in range(14)]])],
-        ]
-        labels=[np.array([0,1]), np.array([1,1]), np.array([0,1]), np.array([0,0])]
+    datasets=[
+            [np.array([ [1,4,5,8,3]+[0 for _ in range(11)], [1,1,2,6,3]+[0 for _ in range(11)] ]),
+             np.array([ [1,2]+[0 for _ in range(14)],       [9,10]+[0 for _ in range(14)]])],
+            [np.array([ [1,4,5,5,3]+[0 for _ in range(11)], [1,4,10,5,3]+[0 for _ in range(11)] ]),
+             np.array([ [10]+[0 for _ in range(15)],        [10]+[0 for _ in range(15)]])],
+            [np.array([ [4,4,5,6,3]+[0 for _ in range(11)], [9,4,2,6,3]+[0 for _ in range(11)] ]),
+             np.array([ [1,2]+[0 for _ in range(14)],       [5,10,4,10]+[0 for _ in range(12)]])],
+            [np.array([ [4,4,5,8,3]+[0 for _ in range(11)], [1,4,10,5,3]+[0 for _ in range(11)] ]),
+             np.array([ [1,2]+[0 for _ in range(14)],        [1,2]+[0 for _ in range(14)]])],
+    ]
+    labels=[np.array([0,1]), np.array([1,1]), np.array([0,1]), np.array([0,0])]
     #     print(datasets)
     #     print(labels)
-    #     print(label)
 
-        ## Train
-        for epoch in range(1, hp.num_epochs):
-            print("*** Epoch %d ***"%epoch)
-            for mb,(data,lab) in enumerate(zip(datasets,labels)):
-                feed_dict={
-                        g.idx_q:data[0],
-                        g.idx_a:data[1],
-                        g.label:lab,
-                        }
-                log_loss,log_train_op = g.sess.run([g.mean_loss,g.train_op],feed_dict=feed_dict)
-                print("Epoch: %d, Mini-batch: %d, loss: %f"%(epoch,mb,log_loss))
-        print("Train Done.")
-
-        ## Test
-        for data,lab in zip(datasets,labels):
+    ## Train
+    for epoch in range(1, hp.num_epochs):
+        print("*** Epoch %d ***"%epoch)
+        for mb,(data,lab) in enumerate(zip(datasets,labels)):
             feed_dict={
                     g.idx_q:data[0],
                     g.idx_a:data[1],
                     g.label:lab,
                     }
-            log_prob = g.sess.run([g.prob],feed_dict=feed_dict)
-            log_class = np.argmax(log_prob,axis=-1)
-            print("Probability: "+str(log_prob))
-            print("Argmax: "+str(log_class))
-        print("Test Done.")    
+            log_loss,log_train_op = g.sess.run([g.mean_loss,g.train_op],feed_dict=feed_dict)
+            print("Epoch: %d, Mini-batch: %d, loss: %f"%(epoch,mb,log_loss))
+    print("Train Done.")
+
+    ## Test
+    for data,lab in zip(datasets,labels):
+        feed_dict={
+                g.idx_q:data[0],
+                g.idx_a:data[1],
+                g.label:lab,
+                }
+        log_prob = g.sess.run([g.prob],feed_dict=feed_dict)
+        log_class = np.argmax(log_prob,axis=-1)
+        #print("Probability: "+str(log_prob))
+        print("Argmax: "+str(log_class))
+    print("Test Done.")    

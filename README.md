@@ -1,7 +1,8 @@
-# tensorflow-tutorial2018
+# tensorflow-tutorial2018 for NLP
 
 ## Introduction ##
-This is a beginner's tensorflow tutorial based on ipython notebook.
+This is a beginner's tensorflow tutorial for NLP engineers and researchers.
+This turoial bases on Jupyter notebook.
 I used this material at tensorflow tutorial @ kurohashi-kawahara lab in Kyoto University.
 
 ## Requirements ##
