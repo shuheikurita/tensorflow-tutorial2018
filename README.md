@@ -11,6 +11,7 @@ ipdb (for debugging)
 
 ## What to do first ##
 Check following commands before the lecture.
+
 ```
 git clone https://github.com/shuheikurita/tensorflow-tutorial2018
 cd tensorflow-tutorial2018
@@ -20,6 +21,7 @@ pip install tensorflow
 # pip install tensorflow-gpu  ## for GPU usage.
 pip install ipdb ## for debugger
 ```
+
 Our tasks will be done on the Jupyter notebook:
 ```
 pip install jupyter
@@ -27,6 +29,8 @@ jupyter notebook
 ```
 . Open the link`http://localhost:8888/?token=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX (specified on the termial)` on your Chrome browser. (Firefox might work. I recommend either Chrome or Firefox.)
 Ask me if you cannot launch the Jupyter notebook before the lecture.
+
+Open *tutorial.ipynb*
 
 ## Author ##
 Shuhei Kurita kurita@nlp.ist.i.kyoto-u.ac.jp
